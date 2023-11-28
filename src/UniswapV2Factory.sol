@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.20;
 
 import "./UniswapV2Pair.sol";
 
@@ -34,7 +34,7 @@ contract UniswapV2Factory {
             pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
         }
 
-        IUniswapV2Pair(pair).initialize(token0, token1);
+        UniswapV2Pair(pair).initialize(token0, token1);
         getPair[token0][token1] = pair;
         getPair[token1][token0] = pair; // support symmetry in pair lookup
         allPairs.push(pair);
