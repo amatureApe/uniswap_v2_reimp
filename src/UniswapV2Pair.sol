@@ -104,8 +104,10 @@ contract UniswapV2Pair is ERC20, ReentrancyGuard {
         uint256 amount1Out,
         address to,
         uint256 amount0In,
-        uint256 amount1In
-    ) external {
+        uint256 amount1In,
+        uint256 minAmount0Out,
+        uint256 minAmount1Out
+    ) external nonReentrant {
         require(amount0Out > 0 || amount1Out > 0, "Insufficient output amount");
         require(amount0In > 0 || amount1In > 0, "Insufficient input amount");
         (uint256 balance0, uint256 balance1) = getReserves();
@@ -135,6 +137,16 @@ contract UniswapV2Pair is ERC20, ReentrancyGuard {
         // Calculate new balances after the transfer
         uint256 newBalance0 = ERC20(token0).balanceOf(address(this));
         uint256 newBalance1 = ERC20(token1).balanceOf(address(this));
+
+        // Slippage protection: Ensure the user gets at least the minimum amount specified
+        require(
+            newBalance0 - reserve0 >= minAmount0Out,
+            "Slippage exceeded for token0"
+        );
+        require(
+            newBalance1 - reserve1 >= minAmount1Out,
+            "Slippage exceeded for token1"
+        );
 
         // Transfer output tokens to the recipient
         if (amount0Out > 0) ERC20(token0).transfer(to, amount0Out);

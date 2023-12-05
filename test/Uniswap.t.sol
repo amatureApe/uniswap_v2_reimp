@@ -88,18 +88,18 @@ contract UniswapV2Test is Test {
         assertGt(token1.balanceOf(address(this)), 0, "Did not receive Token B");
     }
 
-    }
-
     function testSwap() public {
-        uint256 amount0In = 1e16;
-        uint256 amount1Out = 1e16;
+        uint256 amount0In = 1e16; // Amount of token0 to swap
+        uint256 amount1Out = 1e16; // Expected amount of token1 to receive
+        uint256 minAmount0Out = 0; // Minimum acceptable amount of token0 (set to 0 if not swapping token0)
+        uint256 minAmount1Out = 0; // Minimum acceptable amount of token1 (set to 0 if not swapping token1)
 
         testMint();
 
         vm.startPrank(bob);
         token0.mint(bob, 1e18);
 
-        // Assume the bob has enough token0 and has approved the pair contract
+        // Assume bob has enough token0 and has approved the pair contract
         uint256 userToken0BalanceBefore = token0.balanceOf(bob);
         uint256 userToken1BalanceBefore = token1.balanceOf(bob);
         uint256 pairToken0BalanceBefore = token0.balanceOf(address(pair));
@@ -109,7 +109,15 @@ contract UniswapV2Test is Test {
         token0.approve(address(pair), amount0In);
 
         // Perform the swap
-        pair.swap(0, amount1Out, bob, amount0In, 0);
+        pair.swap(
+            0,
+            amount1Out,
+            bob,
+            amount0In,
+            0,
+            minAmount0Out,
+            minAmount1Out
+        );
 
         // Check balances after the swap
         uint256 userToken0BalanceAfter = token0.balanceOf(bob);
@@ -117,7 +125,26 @@ contract UniswapV2Test is Test {
         uint256 pairToken0BalanceAfter = token0.balanceOf(address(pair));
         uint256 pairToken1BalanceAfter = token1.balanceOf(address(pair));
 
-        assertGt(token1.balanceOf(bob), 0, "Swap failed");
-        assertLt(token1.balanceOf(address(pair)), 1e18, "Swap failed");
+        // Asserts
+        assertGt(
+            token1.balanceOf(bob),
+            userToken1BalanceBefore,
+            "Swap did not increase bob's token1 balance"
+        );
+        assertLt(
+            token0.balanceOf(bob),
+            userToken0BalanceBefore,
+            "Swap did not decrease bob's token0 balance"
+        );
+        assertGt(
+            token0.balanceOf(address(pair)),
+            pairToken0BalanceBefore,
+            "Swap did not increase pair's token0 balance"
+        );
+        assertLt(
+            token1.balanceOf(address(pair)),
+            pairToken1BalanceBefore,
+            "Swap did not decrease pair's token1 balance"
+        );
     }
 }
