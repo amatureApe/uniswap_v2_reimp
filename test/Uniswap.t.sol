@@ -20,8 +20,8 @@ contract MockERC20 is ERC20 {
 
 contract UniswapV2Test is Test {
     UniswapV2Factory factory;
-    MockERC20 tokenA;
-    MockERC20 tokenB;
+    MockERC20 token0;
+    MockERC20 token1;
     UniswapV2Pair pair;
 
     address bob;
@@ -33,17 +33,17 @@ contract UniswapV2Test is Test {
         factory = new UniswapV2Factory();
 
         // Deploy mock ERC20 tokens
-        tokenA = new MockERC20("Token A", "TKNA", 18);
-        tokenB = new MockERC20("Token B", "TKNB", 18);
+        token0 = new MockERC20("Token 0", "TKNA", 18);
+        token1 = new MockERC20("Token 1", "TKNB", 18);
 
         // Mint some tokens to this contract for testing
-        tokenA.mint(address(this), 1e18);
-        tokenB.mint(address(this), 1e18);
+        token0.mint(address(this), 1e18);
+        token1.mint(address(this), 1e18);
 
         // Create a pair
         address pairAddress = factory.createPair(
-            address(tokenA),
-            address(tokenB)
+            address(token0),
+            address(token1)
         );
         pair = UniswapV2Pair(pairAddress);
     }
@@ -54,14 +54,14 @@ contract UniswapV2Test is Test {
 
     function testMint() public {
         // Transfer tokens to the pair contract
-        uint256 initialAmountA = 1e18;
-        uint256 initialAmountB = 1e18;
-        tokenA.transfer(address(pair), initialAmountA);
-        tokenB.transfer(address(pair), initialAmountB);
+        uint256 initialAmount0 = 1e18;
+        uint256 initialAmount1 = 1e18;
+        token0.transfer(address(pair), initialAmount0);
+        token1.transfer(address(pair), initialAmount1);
 
         // Approve the pair to spend tokens
-        tokenA.approve(address(pair), initialAmountA);
-        tokenB.approve(address(pair), initialAmountB);
+        token0.approve(address(pair), initialAmount0);
+        token1.approve(address(pair), initialAmount1);
 
         // Call the mint function
         pair.mint(address(this));
@@ -84,31 +84,40 @@ contract UniswapV2Test is Test {
 
         // Check if liquidity tokens were burned and tokens were received
         assertEq(pair.balanceOf(address(this)), 0, "Burning failed");
-        assertGt(tokenA.balanceOf(address(this)), 0, "Did not receive Token A");
-        assertGt(tokenB.balanceOf(address(this)), 0, "Did not receive Token B");
+        assertGt(token0.balanceOf(address(this)), 0, "Did not receive Token A");
+        assertGt(token1.balanceOf(address(this)), 0, "Did not receive Token B");
+    }
+
     }
 
     function testSwap() public {
-        vm.prank(bob);
-        tokenA.mint(bob, 1e18);
+        uint256 amount0In = 1e16;
+        uint256 amount1Out = 1e16;
 
-        emit log_named_uint("bobA", ERC20(tokenA).balanceOf(bob));
-        emit log_named_uint("bobB", ERC20(tokenB).balanceOf(bob));
-
-        // First mint some liquidity tokens
         testMint();
 
         vm.startPrank(bob);
+        token0.mint(bob, 1e18);
 
-        uint256 swapAmount = 1e16;
-        tokenA.approve(address(pair), swapAmount);
+        // Assume the bob has enough token0 and has approved the pair contract
+        uint256 userToken0BalanceBefore = token0.balanceOf(bob);
+        uint256 userToken1BalanceBefore = token1.balanceOf(bob);
+        uint256 pairToken0BalanceBefore = token0.balanceOf(address(pair));
+        uint256 pairToken1BalanceBefore = token1.balanceOf(address(pair));
 
-        pair.swap(swapAmount, 100, bob);
+        // Bob approves the pair contract to spend their token0
+        token0.approve(address(pair), amount0In);
 
-        emit log_named_uint("bobA", ERC20(tokenA).balanceOf(bob));
-        emit log_named_uint("bobB", ERC20(tokenB).balanceOf(bob));
+        // Perform the swap
+        pair.swap(0, amount1Out, bob, amount0In, 0);
 
-        // // Check if the swap was successful
-        assertGt(tokenB.balanceOf(bob), 0, "Swap failed");
+        // Check balances after the swap
+        uint256 userToken0BalanceAfter = token0.balanceOf(bob);
+        uint256 userToken1BalanceAfter = token1.balanceOf(bob);
+        uint256 pairToken0BalanceAfter = token0.balanceOf(address(pair));
+        uint256 pairToken1BalanceAfter = token1.balanceOf(address(pair));
+
+        assertGt(token1.balanceOf(bob), 0, "Swap failed");
+        assertLt(token1.balanceOf(address(pair)), 1e18, "Swap failed");
     }
 }

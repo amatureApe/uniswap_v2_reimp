@@ -40,6 +40,11 @@ contract UniswapV2Pair is ERC20, ReentrancyGuard {
         factory = msg.sender;
     }
 
+    function _update(uint256 balance0, uint256 balance1) private {
+        reserve0 = balance0;
+        reserve1 = balance1;
+    }
+
     function initialize(address _token0, address _token1) external {
         require(msg.sender == factory, "UniswapV2: FORBIDDEN");
         token0 = _token0;
@@ -65,8 +70,7 @@ contract UniswapV2Pair is ERC20, ReentrancyGuard {
         require(liquidity > 0, "UniswapV2: INSUFFICIENT_LIQUIDITY_MINTED");
         _mint(to, liquidity);
 
-        reserve0 = balance0;
-        reserve1 = balance1;
+        _update(balance0, balance1);
 
         emit Mint(msg.sender, to, liquidity);
     }
@@ -96,47 +100,60 @@ contract UniswapV2Pair is ERC20, ReentrancyGuard {
     }
 
     function swap(
-        uint amount0Out,
-        uint amount1Out,
-        address to
-    ) external nonReentrant {
-        require(
-            amount0Out > 0 || amount1Out > 0,
-            "UniswapV2: INSUFFICIENT_OUTPUT_AMOUNT"
-        );
-        require(
-            amount0Out < reserve0 && amount1Out < reserve1,
-            "UniswapV2: INSUFFICIENT_LIQUIDITY"
-        );
+        uint256 amount0Out,
+        uint256 amount1Out,
+        address to,
+        uint256 amount0In,
+        uint256 amount1In
+    ) external {
+        require(amount0Out > 0 || amount1Out > 0, "Insufficient output amount");
+        require(amount0In > 0 || amount1In > 0, "Insufficient input amount");
+        (uint256 balance0, uint256 balance1) = getReserves();
 
-        // Transfer the tokens
+        // Transfer input tokens to the contract
+        if (amount0In > 0) {
+            require(
+                ERC20(token0).transferFrom(
+                    msg.sender,
+                    address(this),
+                    amount0In
+                ),
+                "Transfer of token0 failed"
+            );
+        }
+        if (amount1In > 0) {
+            require(
+                ERC20(token1).transferFrom(
+                    msg.sender,
+                    address(this),
+                    amount1In
+                ),
+                "Transfer of token1 failed"
+            );
+        }
+
+        // Calculate new balances after the transfer
+        uint256 newBalance0 = ERC20(token0).balanceOf(address(this));
+        uint256 newBalance1 = ERC20(token1).balanceOf(address(this));
+
+        // Transfer output tokens to the recipient
         if (amount0Out > 0) ERC20(token0).transfer(to, amount0Out);
         if (amount1Out > 0) ERC20(token1).transfer(to, amount1Out);
 
-        // Update reserves to the current balance if transfers are successful
-        uint balance0 = ERC20(token0).balanceOf(address(this));
-        uint balance1 = ERC20(token1).balanceOf(address(this));
-
-        // Calculate the inputs based on new balances
-        uint amount0In = balance0 > reserve0 - amount0Out
-            ? balance0 - (reserve0 - amount0Out)
-            : 0;
-        uint amount1In = balance1 > reserve1 - amount1Out
-            ? balance1 - (reserve1 - amount1Out)
-            : 0;
+        // Final balance check and reserve update
+        newBalance0 = ERC20(token0).balanceOf(address(this));
+        newBalance1 = ERC20(token1).balanceOf(address(this));
         // require(
-        //     amount0In > 0 || amount1In > 0,
-        //     "UniswapV2: INSUFFICIENT_INPUT_AMOUNT"
+        //     newBalance0 * newBalance1 >= balance0 * balance1,
+        //     "K invariant violation"
         // );
 
-        // Update the reserves
-        reserve0 = balance0;
-        reserve1 = balance1;
+        _update(newBalance0, newBalance1);
+    }
 
-        // Ensure K is maintained
-        require(reserve0 * reserve1 >= amount0In * amount1In, "UniswapV2: K");
-
-        emit Swap(msg.sender, amount0Out, amount1Out, to);
+    ////// VIEWS ///////
+    function getReserves() public view returns (uint256, uint256) {
+        return (reserve0, reserve1);
     }
 
     ////// UTILS ///////
