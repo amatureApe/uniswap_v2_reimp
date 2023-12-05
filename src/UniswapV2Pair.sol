@@ -104,22 +104,37 @@ contract UniswapV2Pair is ERC20, ReentrancyGuard {
             amount0Out > 0 || amount1Out > 0,
             "UniswapV2: INSUFFICIENT_OUTPUT_AMOUNT"
         );
-        (uint _reserve0, uint _reserve1) = (reserve0, reserve1);
         require(
-            amount0Out < _reserve0 && amount1Out < _reserve1,
+            amount0Out < reserve0 && amount1Out < reserve1,
             "UniswapV2: INSUFFICIENT_LIQUIDITY"
         );
 
-        if (amount0Out > 0) ERC20(address(token0)).transfer(to, amount0Out);
+        // Transfer the tokens
+        if (amount0Out > 0) ERC20(token0).transfer(to, amount0Out);
+        if (amount1Out > 0) ERC20(token1).transfer(to, amount1Out);
 
-        if (amount1Out > 0) ERC20(address(token1)).transfer(to, amount1Out);
-
+        // Update reserves to the current balance if transfers are successful
         uint balance0 = ERC20(token0).balanceOf(address(this));
         uint balance1 = ERC20(token1).balanceOf(address(this));
 
-        require(balance0 * balance1 >= _reserve0 * _reserve1, "UniswapV2: K");
+        // Calculate the inputs based on new balances
+        uint amount0In = balance0 > reserve0 - amount0Out
+            ? balance0 - (reserve0 - amount0Out)
+            : 0;
+        uint amount1In = balance1 > reserve1 - amount1Out
+            ? balance1 - (reserve1 - amount1Out)
+            : 0;
+        // require(
+        //     amount0In > 0 || amount1In > 0,
+        //     "UniswapV2: INSUFFICIENT_INPUT_AMOUNT"
+        // );
+
+        // Update the reserves
         reserve0 = balance0;
         reserve1 = balance1;
+
+        // Ensure K is maintained
+        require(reserve0 * reserve1 >= amount0In * amount1In, "UniswapV2: K");
 
         emit Swap(msg.sender, amount0Out, amount1Out, to);
     }

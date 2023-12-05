@@ -24,7 +24,11 @@ contract UniswapV2Test is Test {
     MockERC20 tokenB;
     UniswapV2Pair pair;
 
+    address bob;
+
     function setUp() public {
+        bob = makeAddr("bob");
+
         // Deploy the factory
         factory = new UniswapV2Factory();
 
@@ -49,9 +53,15 @@ contract UniswapV2Test is Test {
     }
 
     function testMint() public {
+        // Transfer tokens to the pair contract
+        uint256 initialAmountA = 1e18;
+        uint256 initialAmountB = 1e18;
+        tokenA.transfer(address(pair), initialAmountA);
+        tokenB.transfer(address(pair), initialAmountB);
+
         // Approve the pair to spend tokens
-        tokenA.approve(address(pair), 1e18);
-        tokenB.approve(address(pair), 1e18);
+        tokenA.approve(address(pair), initialAmountA);
+        tokenB.approve(address(pair), initialAmountB);
 
         // Call the mint function
         pair.mint(address(this));
@@ -64,22 +74,41 @@ contract UniswapV2Test is Test {
         // First mint some liquidity tokens
         testMint();
 
-        // Approve and burn liquidity tokens
-        pair.approve(address(pair), pair.balanceOf(address(this)));
-        pair.burn(address(this));
+        // Transfer liquidity tokens to the pair contract
+        uint256 liquidity = pair.balanceOf(address(this));
+        pair.transfer(address(pair), liquidity);
 
-        // Check if liquidity tokens were burned
+        // Approve and burn liquidity tokens
+        pair.approve(address(pair), liquidity);
+        (uint amount0, uint amount1) = pair.burn(address(this));
+
+        // Check if liquidity tokens were burned and tokens were received
         assertEq(pair.balanceOf(address(this)), 0, "Burning failed");
+        assertGt(tokenA.balanceOf(address(this)), 0, "Did not receive Token A");
+        assertGt(tokenB.balanceOf(address(this)), 0, "Did not receive Token B");
     }
 
     function testSwap() public {
+        vm.prank(bob);
+        tokenA.mint(bob, 1e18);
+
+        emit log_named_uint("bobA", ERC20(tokenA).balanceOf(bob));
+        emit log_named_uint("bobB", ERC20(tokenB).balanceOf(bob));
+
         // First mint some liquidity tokens
         testMint();
 
-        // Swap tokens
-        pair.swap(1e17, 0, address(this));
+        vm.startPrank(bob);
 
-        // Check if the swap was successful
-        assertGt(tokenB.balanceOf(address(this)), 1e18, "Swap failed");
+        uint256 swapAmount = 1e16;
+        tokenA.approve(address(pair), swapAmount);
+
+        pair.swap(swapAmount, 100, bob);
+
+        emit log_named_uint("bobA", ERC20(tokenA).balanceOf(bob));
+        emit log_named_uint("bobB", ERC20(tokenB).balanceOf(bob));
+
+        // // Check if the swap was successful
+        assertGt(tokenB.balanceOf(bob), 0, "Swap failed");
     }
 }

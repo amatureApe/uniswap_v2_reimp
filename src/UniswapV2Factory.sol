@@ -28,13 +28,10 @@ contract UniswapV2Factory {
             "UniswapV2: PAIR_EXISTS"
         );
 
-        bytes memory bytecode = type(UniswapV2Pair).creationCode;
-        bytes32 salt = keccak256(abi.encodePacked(token0, token1));
-        assembly {
-            pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
-        }
+        UniswapV2Pair newPair = new UniswapV2Pair("MyLpToken", "MLT", 18);
+        newPair.initialize(token0, token1);
+        pair = address(newPair);
 
-        UniswapV2Pair(pair).initialize(token0, token1);
         getPair[token0][token1] = pair;
         getPair[token1][token0] = pair; // support symmetry in pair lookup
         allPairs.push(pair);
