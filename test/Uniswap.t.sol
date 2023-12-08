@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../src/UniswapV2Factory.sol";
 import "../src/UniswapV2Pair.sol";
 import "@solady/tokens/ERC20.sol";
+import "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
 
 contract MockERC20 is ERC20 {
     constructor(
@@ -15,6 +16,19 @@ contract MockERC20 is ERC20 {
 
     function mint(address to, uint256 amount) public {
         _mint(to, amount);
+    }
+}
+
+contract FlashLoanReceiver is IERC3156FlashBorrower {
+    function onFlashLoan(
+        address initiator,
+        address token,
+        uint256 amount,
+        uint256 fee,
+        bytes calldata data
+    ) external override returns (bytes32) {
+        ERC20(token).transfer(msg.sender, amount + fee);
+        return keccak256("ERC3156FlashBorrower.onFlashLoan");
     }
 }
 
@@ -145,6 +159,34 @@ contract UniswapV2Test is Test {
             token1.balanceOf(address(pair)),
             pairToken1BalanceBefore,
             "Swap did not decrease pair's token1 balance"
+        );
+    }
+
+    function testFlashLoan() public {
+        // Create a flash loan receiver contract
+        FlashLoanReceiver receiver = new FlashLoanReceiver();
+
+        // Mint tokens to the Uniswap pair for flash loan liquidity
+        testMint();
+
+        // Define flash loan parameters
+        uint256 flashLoanAmount = 1e16; // Amount to borrow
+        bytes memory data; // Additional data, if needed
+
+        // Record balances before the flash loan
+        uint256 pairBalanceBefore = token0.balanceOf(address(pair));
+
+        // Execute the flash loan
+        pair.flashLoan(receiver, address(token0), flashLoanAmount, data);
+
+        // Record balances after the flash loan
+        uint256 pairBalanceAfter = token0.balanceOf(address(pair));
+
+        // Asserts
+        assertEq(
+            pairBalanceBefore,
+            pairBalanceAfter,
+            "Flash loan did not return the expected amount"
         );
     }
 }

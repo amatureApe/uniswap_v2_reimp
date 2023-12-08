@@ -4,9 +4,13 @@ pragma solidity 0.8.20;
 import "@solady/tokens/ERC20.sol";
 import "@solady/utils/FixedPointMathLib.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/interfaces/IERC3156.sol";
 
 contract UniswapV2Pair is ERC20, ReentrancyGuard {
     using FixedPointMathLib for uint256;
+
+    // Flash loan fee rate (e.g., 0.0009 for 0.09%)
+    uint256 public constant FLASH_LOAN_FEE_RATE = 0.0000 ether;
 
     address public factory;
     address public token0;
@@ -161,6 +165,48 @@ contract UniswapV2Pair is ERC20, ReentrancyGuard {
         // );
 
         _update(newBalance0, newBalance1);
+    }
+
+    // ERC-3156 Flash loan function
+    function flashLoan(
+        IERC3156FlashBorrower receiver,
+        address token,
+        uint256 amount,
+        bytes calldata data
+    ) external nonReentrant returns (bool) {
+        require(token == token0 || token == token1, "UniswapV2: INVALID_TOKEN");
+
+        uint256 fee = amount.mulWadDown(FLASH_LOAN_FEE_RATE);
+        uint256 amountOwed = amount + fee;
+
+        // Ensure the pair has enough liquidity
+        uint256 balanceBefore = ERC20(token).balanceOf(address(this));
+        require(balanceBefore >= amount, "UniswapV2: INSUFFICIENT_LIQUIDITY");
+
+        // Send the flash loan amount to the receiver
+        ERC20(token).transfer(address(receiver), amount);
+
+        // Expect the receiver to return the amount plus fee
+        require(
+            receiver.onFlashLoan(msg.sender, token, amount, fee, data) ==
+                keccak256("ERC3156FlashBorrower.onFlashLoan"),
+            "UniswapV2: INVALID_RETURN_DATA"
+        );
+
+        uint256 balanceAfter = ERC20(token).balanceOf(address(this));
+        require(
+            balanceAfter >= amountOwed,
+            "UniswapV2: INSUFFICIENT_REPAYMENT"
+        );
+
+        // Update reserves if necessary
+        if (token == token0) {
+            _update(balanceAfter, reserve1);
+        } else {
+            _update(reserve0, balanceAfter);
+        }
+
+        return true;
     }
 
     ////// VIEWS ///////
