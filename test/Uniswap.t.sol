@@ -139,6 +139,12 @@ contract UniswapV2Test is Test {
         uint256 pairToken0BalanceAfter = token0.balanceOf(address(pair));
         uint256 pairToken1BalanceAfter = token1.balanceOf(address(pair));
 
+        emit log_named_uint("before0", userToken0BalanceBefore);
+        emit log_named_uint("after0", userToken0BalanceAfter);
+
+        emit log_named_uint("before1", userToken1BalanceBefore);
+        emit log_named_uint("after1", userToken1BalanceAfter);
+
         // Asserts
         assertGt(
             token1.balanceOf(bob),
