@@ -159,10 +159,10 @@ contract UniswapV2Pair is ERC20, ReentrancyGuard {
         // Final balance check and reserve update
         newBalance0 = ERC20(token0).balanceOf(address(this));
         newBalance1 = ERC20(token1).balanceOf(address(this));
-        // require(
-        //     newBalance0 * newBalance1 >= balance0 * balance1,
-        //     "K invariant violation"
-        // );
+        require(
+            newBalance0 * newBalance1 >= balance0 * balance1,
+            "K invariant violation"
+        );
 
         _update(newBalance0, newBalance1);
     }
